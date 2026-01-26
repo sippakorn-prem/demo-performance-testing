@@ -1,0 +1,45 @@
+# Prometheus Configuration for Performance Testing Workshop
+# TEACHING PURPOSE: Scrapes metrics from the FastAPI demo API
+
+global:
+  scrape_interval: 5s  # Scrape every 5 seconds for real-time visualization
+  evaluation_interval: 5s
+  external_labels:
+    monitor: 'demo-api-monitor'
+
+scrape_configs:
+  - job_name: 'demo-api'
+    static_configs:
+      - targets: ['api:8000']  # Scrape metrics from FastAPI /metrics endpoint
+        labels:
+          service: 'demo-api'
+          environment: 'workshop'
+
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']  # Scrape container metrics (CPU, Memory, Network)
+        labels:
+          service: 'cadvisor'
+          environment: 'workshop'
+    metric_relabel_configs:
+      # Extract custom app label for easy identification
+      - source_labels: [container_label_app]
+        target_label: app_name
+        regex: '(.+)'
+        replacement: '${1}'
+      # Extract service label
+      - source_labels: [container_label_service]
+        target_label: service_name
+        regex: '(.+)'
+        replacement: '${1}'
+      # Extract component label
+      - source_labels: [container_label_component]
+        target_label: component_name
+        regex: '(.+)'
+        replacement: '${1}'
+      # Create a unified container_identifier label (prefer app, fallback to service)
+      - source_labels: [container_label_app, container_label_service]
+        target_label: container_identifier
+        separator: '-'
+        regex: '(.+)'
+        replacement: '${1}'
