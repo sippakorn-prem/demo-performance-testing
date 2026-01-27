@@ -36,7 +36,7 @@ help:
 	@echo "      Start API with: make up"
 
 up:
-	docker-compose up -d
+	docker-compose up -d --build
 	@echo "Services started!"
 	@echo "API: http://localhost:8000"
 	@echo "Grafana: http://localhost:3500 (admin/admin)"
