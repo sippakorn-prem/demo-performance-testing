@@ -1,327 +1,651 @@
-# Performance Testing 101 using Locust - Workshop Materials
+# Performance Testing 101 with Locust - Workshop Materials
 
-Welcome to the performance testing workshop! This repository contains everything you need to learn performance testing with Locust.
+A complete demo project for learning performance testing using FastAPI, Locust, Prometheus, and Grafana.
 
-## Prerequisites
+## 🎯 Workshop Goals
 
-- **Python 3.10+** (check with `python --version`)
+After completing this workshop, you will be able to:
+- Understand different types of performance tests (load, stress, spike, soak, etc.)
+- Write Locust test scripts
+- Run performance tests and interpret results
+- Identify performance bottlenecks (CPU, database, connection limits)
+- Use monitoring tools (Prometheus, Grafana) to observe system behavior
+
+## 📋 Prerequisites
+
+- **Python 3.11+** (check with `python --version`)
+- **Docker & Docker Compose** (for running the full stack)
 - Basic understanding of HTTP APIs
 - A terminal/command line
 
-## Quick Start
+## 🚀 Quick Start
 
-### Option 1: Run API Locally (Recommended for Learning)
+### Option 1: Docker Compose (Recommended)
 
-1. **Create and activate virtual environment:**
+Start the entire stack (API, Postgres, Prometheus, Grafana):
+
 ```bash
-python -m venv venv
-
-# On macOS/Linux:
-source venv/bin/activate
-
-# On Windows:
-venv\Scripts\activate
+make up
+# or
+docker-compose up -d
 ```
 
-2. **Install dependencies:**
+This starts:
+- **API**: http://localhost:8000
+- **API Docs**: http://localhost:8000/docs
+- **Prometheus**: http://localhost:9090
+- **Grafana**: http://localhost:3500 (admin/admin)
+- **cAdvisor**: http://localhost:8080
+
+### Option 2: Local Development
+
+1. **Install dependencies:**
 ```bash
 pip install -r requirements.txt
 ```
 
-3. **Run the FastAPI demo API:**
+2. **Start Postgres** (or use Docker):
+```bash
+docker run -d --name demo-postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=demo_db -p 5432:5432 postgres:15-alpine
+```
+
+3. **Set database URL:**
+```bash
+export DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/demo_db
+```
+
+4. **Run API:**
 ```bash
 uvicorn app.main:app --reload
 ```
 
-The API will be available at:
-- **API**: http://localhost:8000
-- **API Docs**: http://localhost:8000/docs
-- **Health Check**: http://localhost:8000/health
+## 🔄 Database Migrations
 
-### Option 2: Run API with Docker (Includes Grafana Monitoring)
+The project uses **Alembic** for database schema management. Migrations run automatically on API startup, but you can also manage them manually.
 
-1. **Build and run with Docker Compose:**
+### Automatic Migrations
+
+Migrations run automatically when the API starts. The application will:
+1. Check current database version
+2. Apply any pending migrations
+3. Continue with normal startup
+
+### Manual Migration Management
+
+**Run migrations:**
 ```bash
-docker-compose up --build
+make migrate
+# or
+alembic upgrade head
 ```
 
-The following services will be available:
-- **API**: http://localhost:8000
-- **API Docs**: http://localhost:8000/docs
-- **Health Check**: http://localhost:8000/health
-- **Prometheus Metrics**: http://localhost:8000/metrics
-- **Prometheus UI**: http://localhost:9090
-- **cAdvisor UI**: http://localhost:8080 (container metrics)
-- **Grafana Dashboard**: http://localhost:3000
-  - Username: `admin`
-  - Password: `admin`
-
-2. **Access Grafana Dashboard:**
-   - Open http://localhost:3000 in your browser
-   - Login with credentials above
-   - The "Performance Testing Workshop Dashboard" will be automatically loaded
-   - This dashboard shows real-time metrics including:
-     - **CPU Usage** (gauge + time series)
-     - **Memory Usage** (gauge + time series)
-     - Request Rate (RPS)
-     - Response Time (p95) - Latency
-     - Error Rate
-     - Response Time Percentiles by Endpoint
-
-## Installing and Running Locust
-
-1. **Locust is already in requirements.txt**, so if you installed dependencies above, you're ready!
-
-2. **Run Locust:**
+**Create a new migration:**
 ```bash
-locust
+# After modifying models in app/models.py
+make migrate-create MSG='add new column to products'
+# or
+alembic revision --autogenerate -m "add new column to products"
 ```
 
-3. **Open Locust Web UI:**
-   - Navigate to http://localhost:8089
-   - Enter:
-     - **Number of users**: Start with 10
-     - **Spawn rate**: 2 (users per second)
-     - **Host**: http://localhost:8000
+**View migration history:**
+```bash
+make migrate-history
+# or
+alembic history
+```
 
-4. **Click "Start swarming"** to begin the test!
+**Check current version:**
+```bash
+make migrate-current
+# or
+alembic current
+```
 
-## Monitoring with Grafana
+**Downgrade one revision:**
+```bash
+make migrate-downgrade
+# or
+alembic downgrade -1
+```
 
-When running with Docker Compose, Grafana provides visual dashboards for real-time performance metrics.
+**Downgrade to specific revision:**
+```bash
+alembic downgrade <revision_id>
+```
 
-### Grafana Dashboard Features:
+### Migration Workflow
 
-#### System Metrics (Top Row):
-1. **CPU Usage (%)**
-   - Real-time CPU usage gauge and time series graph
-   - Watch CPU spike when running CPU-intensive tasks (e.g., `/login` with high `loginCpuRounds`)
-   - Helps identify CPU bottlenecks
+1. **Modify models** in `app/models.py`
+2. **Create migration:**
+   ```bash
+   make migrate-create MSG='description of changes'
+   ```
+3. **Review** the generated migration in `alembic/versions/`
+4. **Apply migration:**
+   ```bash
+   make migrate
+   ```
 
-2. **Memory Usage**
-   - Current memory consumption gauge and time series graph
-   - Monitor memory growth over time
-   - Useful for detecting memory leaks
+### Initial Migration
 
-#### Application Metrics:
-3. **Request Rate (RPS)**
-   - Shows requests per second for each endpoint
-   - Helps identify which endpoints are under load
+The initial migration (`001_initial_schema.py`) creates:
+- `products` table with indexes
+- `cart_items` table with indexes
 
-4. **Response Time (p95) - Latency**
-   - 95th percentile response time
-   - Critical metric for user experience
-   - Watch this when testing connection pool limits or high latency endpoints
+This migration is automatically applied on first startup.
 
-5. **Error Rate**
-   - Tracks 5xx errors in real-time
-   - Visual indicator when system is struggling
+## 🌱 Data Seeding
 
-6. **Response Time Percentiles**
-   - p50, p95, p99 by endpoint
-   - Compare performance across different endpoints
+The API automatically seeds **10,000 products** on first startup for quick testing. For massive datasets and all test scenarios, use the dedicated seeder script.
 
-### Using Grafana During Workshop:
+### Quick Seeding (Automatic)
 
-- **Keep Grafana open** alongside Locust UI to see both perspectives
-- **Watch CPU usage** when you increase `loginCpuRounds` - you'll see CPU spike!
-- **Watch memory** to see if it grows steadily (potential memory leak)
-- **Watch latency (p95)** when you reduce `poolMax` - you'll see it increase
-- **Compare metrics** before and after configuration changes
-- **Dashboard auto-refreshes** every 5 seconds for real-time updates
+The API automatically creates 10,000 products on first startup. This is sufficient for basic testing.
 
-### Accessing Monitoring Services:
+### Massive Data Seeding
 
-- **Grafana Dashboard**: http://localhost:3000 (admin/admin)
-- **Prometheus UI**: http://localhost:9090 (for raw metrics queries)
-- **cAdvisor UI**: http://localhost:8080 (container metrics)
-- **API Metrics Endpoint**: http://localhost:8000/metrics
+For comprehensive testing with large datasets:
 
-## What to Observe in Locust UI
+```bash
+# Using Docker (recommended)
+make seed-massive
+# or
+docker-compose exec api python -m app.seed_data
 
-### Key Metrics to Watch:
+# Using local Python
+python -m app.seed_data
+```
 
-1. **p95 Latency** (95th percentile)
-   - **What it means**: 95% of requests completed faster than this time
-   - **Why it matters**: Shows worst-case user experience
-   - **Example**: p95 = 500ms means 95% of users see < 500ms response time
+**What gets seeded:**
+- **100,000+ products** with realistic names, prices, descriptions
+- **Cart items** for 1,000 users (5 items per user average)
+- **Hot products** (IDs: 1, 2, 3, 4, 5, 10, 20, 50, 100, 500) with high stock
+- **Low-stock products** (100 products with stock=1) for concurrency testing
+- **Varied stock levels** (10% low stock, 20% medium, 70% high stock)
 
-2. **RPS** (Requests Per Second)
-   - **What it means**: How many requests the server handles per second
-   - **Why it matters**: Shows system throughput
-   - **Watch for**: RPS plateauing = system at capacity
+**Seeder Features:**
+- ✅ Batch processing for efficiency
+- ✅ Progress tracking
+- ✅ Skips if data already exists
+- ✅ Statistics report after seeding
+- ✅ Realistic product data (categories, prices, descriptions)
 
-3. **Failure Rate**
-   - **What it means**: Percentage of requests that failed
-   - **Why it matters**: Shows system reliability
-   - **Healthy**: < 1% failures
-   - **Warning**: > 5% failures = system struggling
+**Customization via Command Line:**
 
-4. **Response Times (Median, p95, p99)**
-   - **Median**: Typical user experience
-   - **p95**: Worst 5% of users
-   - **p99**: Worst 1% of users
+```bash
+# Seed 500,000 products
+python -m app.seed_data --products 500000
 
-### Locust UI Tabs:
+# Seed with more users
+python -m app.seed_data --users 5000 --items-per-user 10
 
-- **Statistics**: Overview of all endpoints
-- **Charts**: Real-time graphs of RPS, response times, failures
-- **Failures**: List of failed requests with error details
-- **Exceptions**: Python exceptions (if any)
+# Skip cart items (products only)
+python -m app.seed_data --skip-cart
 
-## Workshop Exercises
+# Skip low-stock products
+python -m app.seed_data --skip-low-stock
 
-### Exercise 1: Baseline Run
+# Custom batch size for performance
+python -m app.seed_data --batch-size 2000
 
-**Goal**: Establish baseline performance metrics.
+# Combine options
+python -m app.seed_data --products 200000 --users 2000 --items-per-user 8
+```
 
-1. Start the API (if not already running)
-2. Open Locust UI (http://localhost:8089)
-3. Run with:
-   - **Users**: 20
-   - **Spawn rate**: 2
-   - **Duration**: 2 minutes
-4. **Observe**:
-   - What is the p95 latency?
-   - What is the RPS?
-   - What is the failure rate?
-   - **Write down these numbers!**
+**Available Options:**
+- `--products N` - Number of products (default: 100000)
+- `--users N` - Number of users for cart items (default: 1000)
+- `--items-per-user N` - Average items per user (default: 5)
+- `--skip-cart` - Skip cart item seeding
+- `--skip-low-stock` - Skip low-stock product creation
+- `--batch-size N` - Batch size for performance tuning (default: 1000)
 
-### Exercise 2: Connection Pool Bottleneck
+**Example Output:**
+```
+🚀 Starting Data Seeding Process...
+🌱 Seeding 100,000 products...
+  Progress: 10.0% - Seeded products 1 to 1,000 (1,000 products)
+  Progress: 20.0% - Seeded products 1,001 to 2,000 (1,000 products)
+  ...
+✅ Successfully seeded 100,000 products!
+🔥 Ensuring hot products exist...
+✅ Hot products ready!
+⚠️  Creating 100 low-stock products for concurrency testing...
+✅ Set 100 products to stock=1 for concurrency testing
+🛒 Seeding cart items for 1,000 users...
+✅ Successfully seeded cart items for 1,000 users!
 
-**Goal**: See how connection pool limits cause 503 errors.
+📊 Database Statistics:
+============================================================
+Products: 100,000
+Total Stock: 45,234,567
+Average Price: $502.34
+Low Stock Products (<10): 10,100
 
-1. **Reduce connection pool** (in another terminal):
+Cart Items: 5,000
+Users with Cart Items: 1,000
+============================================================
+```
+
+## 📊 Monitoring Setup
+
+### Grafana Dashboard
+
+1. Open http://localhost:3500
+2. Login with `admin` / `admin`
+3. The "Performance Testing Workshop Dashboard" is automatically provisioned
+4. Dashboard includes:
+   - Request Rate (RPS)
+   - Response Time (p50, p95, p99)
+   - Error Rate
+   - CPU & Memory Usage
+
+### Prometheus
+
+- Open http://localhost:9090
+- Query metrics directly using PromQL
+- Example queries:
+  - `rate(http_server_requests_total[5m])` - Request rate
+  - `histogram_quantile(0.95, http_server_request_duration_seconds_bucket)` - p95 latency
+
+## 🧪 Running Locust Tests
+
+### Install Locust
+
+Locust is included in `requirements.txt`. If running locally:
+
+```bash
+pip install -r requirements.txt
+```
+
+### Test Types Overview
+
+| Test Type | Purpose | Command |
+|-----------|---------|---------|
+| **Baseline** | Establish baseline metrics | `make test-baseline` |
+| **Load** | Expected production traffic | `make test-load` |
+| **Stress** | Find breaking point | `make test-stress` |
+| **Spike** | Sudden traffic spike | `make test-spike` |
+| **Soak** | Endurance/stability test | `make test-soak` |
+| **Concurrency** | Race condition testing | `make test-concurrency` |
+| **Capacity** | SLO validation | `make test-capacity` |
+| **Resilience** | Failure handling | `make test-resilience` |
+
+### 1. Baseline Test
+
+**Purpose**: Establish baseline performance metrics with minimal load.
+
+```bash
+locust -f test/locust_baseline.py --host http://localhost:8000 --users 10 --spawn-rate 2
+```
+
+**What to observe:**
+- p95 latency (should be < 500ms)
+- RPS (requests per second)
+- Error rate (should be < 1%)
+- **Write down these numbers as your baseline!**
+
+### 2. Load Test
+
+**Purpose**: Simulate expected production traffic.
+
+```bash
+locust -f test/locust_load.py --host http://localhost:8000 --users 50 --spawn-rate 5
+```
+
+**What to observe:**
+- Compare metrics to baseline
+- System should handle load gracefully
+- Latency may increase slightly but should remain stable
+
+### 3. Stress Test
+
+**Purpose**: Gradually increase load until system breaks.
+
+```bash
+locust -f test/locust_stress.py --host http://localhost:8000
+```
+
+**What to observe:**
+- Staged ramp-up: 10 → 25 → 50 → 100 → 150 → 200 users
+- Watch for when errors start appearing
+- Observe latency degradation
+- Identify breaking point
+
+**Expected pattern:**
+- Early stages: Stable performance
+- Mid stages: Latency increases, some errors
+- High load: Many errors, system struggling
+
+### 4. Spike Test
+
+**Purpose**: Test system response to sudden traffic spike (flash sale scenario).
+
+```bash
+locust -f test/locust_spike.py --host http://localhost:8000 --users 200 --spawn-rate 50
+```
+
+**What to observe:**
+- Sudden load increase
+- System may struggle initially
+- Recovery time after spike
+- Error rate spike
+
+### 5. Soak Test
+
+**Purpose**: Test system stability over extended period (memory leaks, resource exhaustion).
+
+```bash
+locust -f test/locust_soak.py --host http://localhost:8000 --users 30 --spawn-rate 3 --run-time 30m
+```
+
+**What to observe:**
+- Memory usage over time (should be stable)
+- CPU usage (should be stable)
+- Error rate (should remain low)
+- Latency (should not degrade over time)
+
+**Run for at least 30 minutes to detect:**
+- Memory leaks
+- Connection pool exhaustion
+- Resource leaks
+
+### 6. Concurrency Test
+
+**Purpose**: Test race conditions in stock management (all users checkout same product).
+
+```bash
+locust -f test/locust_concurrency.py --host http://localhost:8000 --users 100 --spawn-rate 20
+```
+
+**What to observe:**
+- 409 (Conflict) errors when stock runs out
+- Race conditions in stock updates
+- Demonstrates need for proper database transactions/locking
+
+**Expected behavior:**
+- First requests succeed
+- As stock depletes, 409 errors appear
+- Shows concurrency issues without proper locking
+
+### 7. Capacity Test
+
+**Purpose**: Validate system meets SLOs (Service Level Objectives).
+
+```bash
+locust -f test/locust_capacity.py --host http://localhost:8000
+```
+
+**SLOs:**
+- p95 latency < 300ms
+- Error rate < 1%
+
+**What to observe:**
+- Stepwise load increase
+- SLO validation at each step
+- PASS/FAIL logging
+- Maximum capacity before SLO violation
+
+### 8. Resilience Test
+
+**Purpose**: Test system behavior when failures are introduced.
+
+```bash
+# Terminal 1: Start test
+locust -f test/locust_resilience.py --host http://localhost:8000 --users 50 --spawn-rate 5
+
+# Terminal 2: Introduce failures
+curl -X POST http://localhost:8000/admin/failure \
+  -H "Content-Type: application/json" \
+  -d '{"checkout": 0.1}'
+```
+
+**What to observe:**
+- Error rate increases when failures introduced
+- System continues operating (graceful degradation)
+- Recovery when failures removed
+
+## 🎓 Workshop Exercises
+
+### Exercise 1: Baseline Measurement
+
+1. Start the API: `make up`
+2. Run baseline test: `make test-baseline`
+3. Record metrics:
+   - p95 latency: _____ ms
+   - RPS: _____ req/s
+   - Error rate: _____ %
+
+### Exercise 2: Introduce Latency
+
+1. Add latency to products endpoint:
+```bash
+curl -X POST http://localhost:8000/admin/latency \
+  -H "Content-Type: application/json" \
+  -d '{"products": 500}'
+```
+
+2. Run load test again: `make test-load`
+3. Compare metrics to baseline
+4. **Observe**: Latency increased significantly
+
+5. Remove latency:
+```bash
+curl -X POST http://localhost:8000/admin/latency \
+  -H "Content-Type: application/json" \
+  -d '{"products": 0}'
+```
+
+### Exercise 3: Introduce Failures
+
+1. Add failure rate to checkout:
+```bash
+curl -X POST http://localhost:8000/admin/failure \
+  -H "Content-Type: application/json" \
+  -d '{"checkout": 0.1}'
+```
+
+2. Run load test: `make test-load`
+3. **Observe**: Error rate increases for checkout endpoint
+4. Check Locust "Failures" tab for error details
+
+5. Remove failures:
+```bash
+curl -X POST http://localhost:8000/admin/failure \
+  -H "Content-Type: application/json" \
+  -d '{"checkout": 0}'
+```
+
+### Exercise 4: CPU Bottleneck
+
+1. Increase CPU-intensive hashing for login:
 ```bash
 curl -X POST http://localhost:8000/admin/config \
   -H "Content-Type: application/json" \
-  -d '{"poolMax": 5, "poolWaitTimeoutMs": 50}'
+  -d '{"auth_hashing_rounds": 100000}'
 ```
 
-2. **Run Locust again** with same settings (20 users, 2 spawn rate, 2 minutes)
-
+2. Run load test: `make test-load`
 3. **Observe**:
-   - How many 503 errors do you see?
-   - What happens to RPS? (Does it plateau?)
-   - What happens to p95 latency?
-   - **Compare to baseline!**
+   - `/auth/login` latency increases dramatically
+   - CPU usage spikes (check Grafana or system monitor)
+   - May affect other endpoints if CPU is saturated
 
-4. **Restore connection pool**:
+4. Restore:
 ```bash
 curl -X POST http://localhost:8000/admin/config \
   -H "Content-Type: application/json" \
-  -d '{"poolMax": 30, "poolWaitTimeoutMs": 300}'
+  -d '{"auth_hashing_rounds": 10000}'
 ```
 
-### Exercise 3: CPU Bottleneck
+### Exercise 5: Concurrency Issues
 
-**Goal**: See how CPU-intensive tasks affect performance.
+1. Run concurrency test: `make test-concurrency`
+2. **Observe**:
+   - All users checkout product_id=1
+   - 409 (Conflict) errors appear as stock depletes
+   - Demonstrates race condition without proper locking
 
-1. **Increase CPU burn** for login:
-```bash
-curl -X POST http://localhost:8000/admin/config \
-  -H "Content-Type: application/json" \
-  -d '{"loginCpuRounds": 50000}'
-```
+## 📈 Interpreting Results
 
-2. **Run Locust again** (20 users, 2 spawn rate, 2 minutes)
-
-3. **Observe**:
-   - What happens to `/login` endpoint latency?
-   - Does it affect other endpoints?
-   - What happens to overall RPS?
-   - **Check your CPU usage** (Activity Monitor / Task Manager)
-
-4. **Restore CPU settings**:
-```bash
-curl -X POST http://localhost:8000/admin/config \
-  -H "Content-Type: application/json" \
-  -d '{"loginCpuRounds": 10000}'
-```
-
-### Exercise 4: Error Rate Monitoring
-
-**Goal**: Understand how error rates are tracked.
-
-1. **Increase checkout failure rate**:
-```bash
-curl -X POST http://localhost:8000/admin/config \
-  -H "Content-Type: application/json" \
-  -d '{"checkoutFailRate": 0.1}'
-```
-
-2. **Run Locust again** (20 users, 2 spawn rate, 2 minutes)
-
-3. **Observe**:
-   - What is the failure rate for `/checkout`?
-   - How does it show up in Locust UI?
-   - What status codes do you see? (502 = Bad Gateway)
-
-4. **Restore failure rate**:
-```bash
-curl -X POST http://localhost:8000/admin/config \
-  -H "Content-Type: application/json" \
-  -d '{"checkoutFailRate": 0.02}'
-```
-
-## Interpreting Results
-
-### Healthy System:
+### Healthy System
 - ✅ p95 latency: < 500ms
-- ✅ Failure rate: < 1%
+- ✅ Error rate: < 1%
 - ✅ RPS: Steady or increasing with load
 - ✅ Response times: Stable
 
-### System Under Stress:
+### System Under Stress
 - ⚠️ p95 latency: > 1000ms
-- ⚠️ Failure rate: > 5%
+- ⚠️ Error rate: > 5%
 - ⚠️ RPS: Plateaus (not increasing with more users)
 - ⚠️ Response times: Increasing over time
 
-### System Breaking:
+### System Breaking
 - ❌ p95 latency: > 5000ms
-- ❌ Failure rate: > 20%
+- ❌ Error rate: > 20%
 - ❌ RPS: Decreasing
 - ❌ Many 503 errors (Service Unavailable)
 
-## API Endpoints Reference
+## 🔧 API Endpoints
 
-- `GET /health` - Health check with pool status
-- `GET /products` - List products (100-300ms latency)
-- `GET /products/{id}` - Product detail (uses connection pool)
-- `POST /login` - Login (CPU-intensive)
-- `POST /checkout` - Checkout (uses pool + random failures)
-- `GET /heavy` - Heavy computation (800-1200ms latency)
+### Health & Metrics
+- `GET /health` - Health check
+- `GET /metrics` - Prometheus metrics
+
+### Authentication
+- `POST /auth/login` - Login (returns access_token)
+
+### Products
+- `GET /products?page=1&limit=20` - List products (paginated)
+- `GET /products/{id}` - Product detail (with caching)
+
+### Cart & Checkout
+- `POST /cart/items` - Add to cart (requires auth)
+- `POST /cart/checkout` - Checkout (requires auth, stock management)
+
+### Admin (Workshop Configuration)
 - `GET /admin/config` - Get current configuration
-- `POST /admin/config` - Update configuration (for workshop exercises)
+- `POST /admin/latency` - Set artificial latency per endpoint group
+- `POST /admin/failure` - Set failure rate per endpoint group
+- `POST /admin/cache` - Configure cache settings
 
-## Troubleshooting
+## 🏗️ Project Structure
 
-### API won't start:
-- Check if port 8000 is already in use
-- Verify Python version: `python --version` (need 3.10+)
-- Check virtual environment is activated
+```
+/
+├── app/                    # FastAPI application
+│   ├── main.py            # Application entry point
+│   ├── settings.py        # Configuration
+│   ├── db.py              # Database connection
+│   ├── models.py          # SQLAlchemy models
+│   ├── migrations.py      # Migration utilities
+│   ├── seed_data.py       # Data seeder script
+│   └── routers/           # API routers
+│       ├── health.py
+│       ├── auth.py
+│       ├── products.py
+│       ├── cart.py
+│       └── admin.py
+├── alembic/                # Database migrations
+│   ├── versions/          # Migration files
+│   ├── env.py            # Alembic environment
+│   └── script.py.mako     # Migration template
+├── alembic.ini            # Alembic configuration
+├── test/                  # Locust test scripts
+│   ├── locust_common.py   # Shared helpers
+│   ├── locust_baseline.py
+│   ├── locust_load.py
+│   ├── locust_stress.py
+│   ├── locust_spike.py
+│   ├── locust_soak.py
+│   ├── locust_concurrency.py
+│   ├── locust_capacity.py
+│   └── locust_resilience.py
+├── prometheus/            # Prometheus configuration
+│   └── prometheus.yml
+├── grafana/               # Grafana provisioning
+│   ├── provisioning/
+│   └── dashboards/
+├── docker-compose.yml     # Docker Compose setup
+├── Makefile               # Convenience commands
+└── README.md             # This file
+```
 
-### Locust can't connect:
+## 🐛 Troubleshooting
+
+### API won't start
+- Check if port 8000 is in use
+- Verify Postgres is running: `docker ps`
+- Check logs: `docker-compose logs api`
+
+### Locust can't connect
 - Verify API is running: `curl http://localhost:8000/health`
-- Check the Host URL in Locust UI matches your API URL
+- Check Host URL in Locust UI matches API URL
 
-### No failures showing:
-- Check the "Failures" tab in Locust UI
-- Verify you're running with enough users to trigger failures
+### Database connection errors
+- Ensure Postgres is running: `docker ps | grep postgres`
+- Check database URL in settings
+- Verify network connectivity in docker-compose
 
-## Next Steps
+### No metrics in Grafana
+- Verify Prometheus is scraping: http://localhost:9090/targets
+- Check Prometheus config: `cat prometheus/prometheus.yml`
+- Ensure API metrics endpoint works: `curl http://localhost:8000/metrics`
 
-After completing the exercises:
-1. Try different user counts (10, 50, 100)
-2. Experiment with different spawn rates
-3. Try running tests for longer durations
-4. Explore the Locust charts to see trends over time
+### Migration errors
+- Ensure database is running: `docker ps | grep postgres`
+- Check database URL in `alembic.ini` or `app/settings.py`
+- Verify you're using the correct database URL for your environment
+- If migrations fail, check: `alembic current` to see current version
+- To reset: Drop database and run migrations again (⚠️ **WARNING**: This deletes all data)
 
-## Resources
+## 📚 Resources
 
 - [Locust Documentation](https://docs.locust.io/)
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
-- [Performance Testing Best Practices](https://docs.locust.io/en/stable/writing-a-locustfile.html)
+- [Prometheus Documentation](https://prometheus.io/docs/)
+- [Grafana Documentation](https://grafana.com/docs/)
+
+## 🎯 Workshop Timeline (3 hours)
+
+### Part 1: Introduction (30 min)
+- Performance testing concepts
+- Types of performance tests
+- Locust basics
+
+### Part 2: Baseline & Load Testing (30 min)
+- Run baseline test
+- Run load test
+- Compare results
+- Exercise: Introduce latency
+
+### Part 3: Stress & Spike Testing (30 min)
+- Run stress test (staged ramp-up)
+- Run spike test
+- Observe breaking points
+- Exercise: CPU bottleneck
+
+### Part 4: Advanced Testing (30 min)
+- Concurrency test (race conditions)
+- Soak test (stability)
+- Capacity test (SLO validation)
+
+### Part 5: Monitoring & Analysis (30 min)
+- Using Grafana dashboards
+- Interpreting Prometheus metrics
+- Identifying bottlenecks
+- Exercise: Resilience testing
+
+### Part 6: Wrap-up (30 min)
+- Q&A
+- Best practices
+- Next steps
+
+## 📝 Notes
+
+- All tests are designed for educational purposes
+- The API intentionally includes bottlenecks for demonstration
+- Results may vary based on system resources
+- Use production-like environments for real testing
 
 Happy testing! 🚀

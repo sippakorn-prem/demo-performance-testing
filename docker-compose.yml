@@ -1,6 +1,22 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: demo-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: demo_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - monitoring
+    restart: unless-stopped
+    # TEACHING PURPOSE: Postgres provides persistent storage for products and cart data
+
   api:
     build: .
     ports:
@@ -14,7 +30,14 @@ services:
       # Mount app directory for hot-reload during development
       # Changes to app/main.py will automatically reload without container restart
       - ./app:/app/app
+      # Mount alembic for migration development
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/demo_db
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    depends_on:
+      - postgres
     labels:
       # Custom labels for easy identification in Prometheus/Grafana
       - "app=demo-api"
@@ -83,5 +106,6 @@ networks:
     driver: bridge
 
 volumes:
+  postgres_data:
   prometheus_data:
   grafana_data:
