@@ -43,3 +43,10 @@ scrape_configs:
         separator: '-'
         regex: '(.+)'
         replacement: '${1}'
+
+  - job_name: 'postgres-exporter'
+    static_configs:
+      - targets: ['postgres-exporter:9187']  # Scrape PostgreSQL metrics via postgres_exporter
+        labels:
+          service: 'postgres'
+          environment: 'workshop'

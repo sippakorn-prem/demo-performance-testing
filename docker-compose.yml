@@ -61,6 +61,22 @@ services:
     restart: unless-stopped
     # TEACHING PURPOSE: Prometheus scrapes metrics from the API for visualization
 
+  postgres_exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:latest
+    container_name: postgres-exporter
+    environment:
+      # TEACHING PURPOSE: Export Postgres internal metrics (connections, cache hit ratio, deadlocks, etc.)
+      # Uses same credentials as the demo database
+      DATA_SOURCE_NAME: "postgresql://postgres:postgres@postgres:5432/demo_db?sslmode=disable"
+    ports:
+      # Expose exporter metrics for local debugging if needed
+      - "9187:9187"
+    networks:
+      - monitoring
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:latest
     container_name: cadvisor
