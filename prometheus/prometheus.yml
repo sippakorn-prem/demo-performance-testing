@@ -22,17 +22,17 @@ scrape_configs:
           service: 'cadvisor'
           environment: 'workshop'
     metric_relabel_configs:
-      # Extract custom app label for easy identification
+      # Extract custom app label for easy identification (from Docker label "app")
       - source_labels: [container_label_app]
         target_label: app_name
         regex: '(.+)'
         replacement: '${1}'
-      # Extract service label
+      # Extract service label (from Docker label "service")
       - source_labels: [container_label_service]
         target_label: service_name
         regex: '(.+)'
         replacement: '${1}'
-      # Extract component label
+      # Extract component label (from Docker label "component")
       - source_labels: [container_label_component]
         target_label: component_name
         regex: '(.+)'
