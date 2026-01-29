@@ -1,55 +1,14 @@
 version: '3.8'
 
 services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: demo-postgres
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: demo_db
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - monitoring
-    restart: unless-stopped
-    labels:
-      # Custom labels for easy identification in Prometheus/Grafana
-      - "app=demo-postgres"
-      - "service=demo-postgres"
-      - "component=db"
-      - "workshop=performance-testing"
-    # TEACHING PURPOSE: Postgres provides persistent storage for products and cart data
-
-  api:
+  app:
     build: .
     ports:
       - "8000:8000"
-    container_name: demo-api
-    # TEACHING PURPOSE: Keep container running for easy restart during workshop
-    restart: unless-stopped
+    container_name: demo-app
     networks:
       - monitoring
-    volumes:
-      # Mount app directory for hot-reload during development
-      # Changes to app/main.py will automatically reload without container restart
-      - ./app:/app/app
-      # Mount alembic for migration development
-      - ./alembic:/app/alembic
-      - ./alembic.ini:/app/alembic.ini
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/demo_db
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
-    depends_on:
-      - postgres
-    labels:
-      # Custom labels for easy identification in Prometheus/Grafana
-      - "app=demo-api"
-      - "service=demo-api"
-      - "component=api"
-      - "workshop=performance-testing"
+    command: ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
 
   prometheus:
     image: prom/prometheus:latest
@@ -64,23 +23,6 @@ services:
       - '--storage.tsdb.path=/prometheus'
     networks:
       - monitoring
-    restart: unless-stopped
-    # TEACHING PURPOSE: Prometheus scrapes metrics from the API for visualization
-
-  postgres_exporter:
-    image: quay.io/prometheuscommunity/postgres-exporter:latest
-    container_name: postgres-exporter
-    environment:
-      # TEACHING PURPOSE: Export Postgres internal metrics (connections, cache hit ratio, deadlocks, etc.)
-      # Uses same credentials as the demo database
-      DATA_SOURCE_NAME: "postgresql://postgres:postgres@postgres:5432/demo_db?sslmode=disable"
-    ports:
-      # Expose exporter metrics for local debugging if needed
-      - "9187:9187"
-    networks:
-      - monitoring
-    depends_on:
-      - postgres
     restart: unless-stopped
 
   cadvisor:
@@ -104,7 +46,6 @@ services:
     privileged: true
     devices:
       - /dev/kmsg
-    # TEACHING PURPOSE: cAdvisor exposes container CPU, memory, and network metrics
 
   grafana:
     image: grafana/grafana:latest
@@ -125,7 +66,6 @@ services:
     depends_on:
       - prometheus
       - cadvisor
-    # TEACHING PURPOSE: Grafana visualizes Prometheus metrics for easy observation during workshop
 
 networks:
   monitoring:

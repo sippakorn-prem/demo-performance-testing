@@ -1,6 +1,4 @@
 # Grafana Datasource Configuration
-# TEACHING PURPOSE: Auto-configures Prometheus as a data source
-
 apiVersion: 1
 
 datasources:

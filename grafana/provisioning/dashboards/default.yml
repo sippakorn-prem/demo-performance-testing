@@ -1,5 +1,4 @@
 # Grafana Dashboard Provisioning
-# TEACHING PURPOSE: Auto-loads the performance testing dashboard
 
 apiVersion: 1
 
@@ -9,7 +8,7 @@ providers:
     folder: ''
     type: file
     disableDeletion: false
-    updateIntervalSeconds: 10
+    updateIntervalSeconds: 5
     allowUiUpdates: true
     options:
       path: /var/lib/grafana/dashboards
