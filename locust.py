@@ -35,10 +35,10 @@ class SimplePerformanceTester(HttpUser):
     @task(2)
     def cpu_heavy(self) -> None:
         """CPU-heavy endpoint: burns CPU for ~1 second."""
-        self.client.get("/cpu-heavy", params={"seconds": 1.0})
+        self.client.get("/cpu-heavy", params={"seconds": 6.0})
 
     @task(1)
     def ram_heavy(self) -> None:
         """RAM-heavy endpoint: allocates ~100 MB."""
-        self.client.get("/ram-heavy", params={"megabytes": 100})
+        self.client.get("/ram-heavy", params={"megabytes": 500})
 
